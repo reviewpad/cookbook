@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+.task
 
 # Test binary, built with `go test -c`
 *.test
@@ -13,3 +14,10 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# IDE directories and files
+.vscode
+
+# OS generated files
+.DS_Store
+__debug_bin
