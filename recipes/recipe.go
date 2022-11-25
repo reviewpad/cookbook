@@ -4,6 +4,8 @@
 
 package recipes
 
+import "context"
+
 type Recipe interface {
-	Run() error
+	Run(context.Context) error
 }
