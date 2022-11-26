@@ -32,6 +32,8 @@ func (s *Size) Run(ctx context.Context) error {
 	repo := s.targetEntity.Repo
 	number := s.targetEntity.Number
 
+	s.collector.Collect("run recipe", s.collectionData())
+
 	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
 		return err
 	}
@@ -71,6 +73,16 @@ func (s *Size) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *Size) collectionData() map[string]interface{} {
+	return map[string]interface{}{
+		"recipe_name": "size",
+		"owner":       s.targetEntity.Owner,
+		"repo":        s.targetEntity.Repo,
+		"kind":        s.targetEntity.Kind,
+		"number":      s.targetEntity.Number,
+	}
 }
 
 func createSizeLabels(ctx context.Context, owner, repo string, ch codehost.Codehost) error {
