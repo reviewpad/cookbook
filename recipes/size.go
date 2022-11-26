@@ -7,8 +7,8 @@ package recipes
 import (
 	"context"
 
-	"github.com/dukex/mixpanel"
 	"github.com/reviewpad/cookbook/codehost"
+	"github.com/reviewpad/reviewpad/v3/collector"
 	"github.com/reviewpad/reviewpad/v3/handler"
 	"golang.org/x/exp/slices"
 )
@@ -16,10 +16,10 @@ import (
 type Size struct {
 	targetEntity handler.TargetEntity
 	codehost     codehost.Codehost
-	collector    mixpanel.Mixpanel
+	collector    collector.Collector
 }
 
-func NewSizeRecipe(targetEntity handler.TargetEntity, codehost codehost.Codehost, collector mixpanel.Mixpanel) (*Size, error) {
+func NewSizeRecipe(targetEntity handler.TargetEntity, codehost codehost.Codehost, collector collector.Collector) (*Size, error) {
 	return &Size{
 		targetEntity,
 		codehost,
