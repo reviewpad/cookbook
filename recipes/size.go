@@ -6,6 +6,7 @@ package recipes
 
 import (
 	"context"
+	"log"
 
 	"github.com/reviewpad/cookbook/codehost"
 	"github.com/reviewpad/reviewpad/v3/collector"
@@ -32,7 +33,10 @@ func (s *Size) Run(ctx context.Context) error {
 	repo := s.targetEntity.Repo
 	number := s.targetEntity.Number
 
-	s.collector.Collect("run recipe", s.collectionData())
+	err := s.collector.Collect("run recipe", s.collectionData())
+	if err != nil {
+		log.Println(err)
+	}
 
 	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
 		return err
@@ -82,6 +86,7 @@ func (s *Size) collectionData() map[string]interface{} {
 		"repo":        s.targetEntity.Repo,
 		"kind":        s.targetEntity.Kind,
 		"number":      s.targetEntity.Number,
+		"distinct_id": s.targetEntity.Owner,
 	}
 }
 
