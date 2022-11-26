@@ -46,10 +46,10 @@ func (s *Size) Run(ctx context.Context) error {
 	labelsToAdd := make([]string, 0)
 	labelsToRemove := make([]string, 0)
 
-	if prSizeData.Changes < 100 {
+	if prSizeData.Changes <= 100 {
 		labelsToAdd = append(labelsToAdd, "small")
 		labelsToRemove = append(labelsToRemove, "medium", "large")
-	} else if prSizeData.Changes > 100 && prSizeData.Changes < 500 {
+	} else if prSizeData.Changes >= 100 && prSizeData.Changes <= 500 {
 		labelsToAdd = append(labelsToAdd, "medium")
 		labelsToRemove = append(labelsToRemove, "small", "large")
 	} else {
