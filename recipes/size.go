@@ -6,6 +6,7 @@ package recipes
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/reviewpad/cookbook/codehost"
@@ -39,12 +40,12 @@ func (s *Size) Run(ctx context.Context) error {
 	}
 
 	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
-		return err
+		return fmt.Errorf("error creating size labels: %w", err)
 	}
 
 	prSizeData, err := s.codehost.GetPRSizeData(ctx, owner, repo, number)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting pr size data: %w", err)
 	}
 
 	labelsToAdd := make([]string, 0)
@@ -73,7 +74,7 @@ func (s *Size) Run(ctx context.Context) error {
 
 	err = s.codehost.SetLabels(ctx, owner, repo, number, labels)
 	if err != nil {
-		return err
+		return fmt.Errorf("error setting pr labels: %w", err)
 	}
 
 	return nil
