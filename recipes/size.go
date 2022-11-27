@@ -62,6 +62,10 @@ func (s *Size) Run(ctx context.Context) error {
 		labelsToRemove = append(labelsToRemove, "small", "medium")
 	}
 
+	log.Printf("adding labels: %v\n", labelsToAdd)
+
+	log.Printf("removing labels: %v\n", labelsToRemove)
+
 	labels := append(prSizeData.Labels, labelsToAdd...)
 
 	for _, labelToRemove := range labelsToRemove {
@@ -71,6 +75,8 @@ func (s *Size) Run(ctx context.Context) error {
 			labels = slices.Delete(labels, index, index+1)
 		}
 	}
+
+	log.Printf("final labels to set: %v", labels)
 
 	err = s.codehost.SetLabels(ctx, owner, repo, number, labels)
 	if err != nil {
