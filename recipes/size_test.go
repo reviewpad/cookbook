@@ -24,10 +24,15 @@ func TestSize(t *testing.T) {
 	tests := map[string]struct {
 		targetEntity handler.TargetEntity
 		wantError    error
+		mock         func()
 	}{}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			if test.mock != nil {
+				test.mock()
+			}
+
 			size, err := initSize(test.targetEntity, codehost, collector)
 			assert.Nil(t, err)
 
