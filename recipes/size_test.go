@@ -17,8 +17,8 @@ import (
 var initSize cookbook.NewRecipe = cookbook.Recipes["size"]
 
 func TestSize(t *testing.T) {
-	collector := &mocks.Collector{}
-	codehost := &mocks.Codehost{}
+	collector := mocks.NewCollector(t)
+	codehost := mocks.NewCodehost(t)
 	ctx := context.Background()
 
 	tests := map[string]struct {
