@@ -7,11 +7,11 @@ package recipes
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/reviewpad/cookbook/codehost"
 	"github.com/reviewpad/reviewpad/v3/collector"
 	"github.com/reviewpad/reviewpad/v3/handler"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
 
@@ -36,16 +36,18 @@ func (s *Size) Run(ctx context.Context) error {
 
 	err := s.collector.Collect("run recipe", s.collectionData())
 	if err != nil {
-		log.Println(err)
+		logrus.WithError(err).Error("error collecting data")
 	}
 
 	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
-		return fmt.Errorf("error creating size labels: %w", err)
+		logrus.WithError(err).Error("error creating size labels")
+		return err
 	}
 
 	prSizeData, err := s.codehost.GetPRSizeData(ctx, owner, repo, number)
 	if err != nil {
-		return fmt.Errorf("error getting pr size data: %w", err)
+		logrus.WithError(err).Error("error getting pr size data")
+		return err
 	}
 
 	labelsToAdd := make([]string, 0)
@@ -62,9 +64,9 @@ func (s *Size) Run(ctx context.Context) error {
 		labelsToRemove = append(labelsToRemove, "small", "medium")
 	}
 
-	log.Printf("adding labels: %v\n", labelsToAdd)
+	logrus.WithField("labels", labelsToAdd).Info("adding labels")
 
-	log.Printf("removing labels: %v\n", labelsToRemove)
+	logrus.WithField("labels", labelsToRemove).Info("removing labels")
 
 	labels := append(prSizeData.Labels, labelsToAdd...)
 
@@ -76,7 +78,7 @@ func (s *Size) Run(ctx context.Context) error {
 		}
 	}
 
-	log.Printf("final labels to set: %v", labels)
+	logrus.WithField("labels", labels).Info("final labels")
 
 	err = s.codehost.SetLabels(ctx, owner, repo, number, labels)
 	if err != nil {

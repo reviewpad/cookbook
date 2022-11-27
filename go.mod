@@ -6,6 +6,7 @@ require (
 	github.com/google/go-github/v48 v48.1.0
 	github.com/reviewpad/reviewpad/v3 v3.15.0
 	github.com/shurcooL/githubv4 v0.0.0-20221021030919-a134b1472cc7
+	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/exp v0.0.0-20221114191408-850992195362
 )
