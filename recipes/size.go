@@ -19,6 +19,7 @@ type Size struct {
 	targetEntity handler.TargetEntity
 	codehost     codehost.Codehost
 	collector    collector.Collector
+	log          *logrus.Entry
 }
 
 func NewSizeRecipe(targetEntity handler.TargetEntity, codehost codehost.Codehost, collector collector.Collector) (*Size, error) {
@@ -26,6 +27,7 @@ func NewSizeRecipe(targetEntity handler.TargetEntity, codehost codehost.Codehost
 		targetEntity,
 		codehost,
 		collector,
+		logrus.WithField("user", fmt.Sprintf("%s/%s", targetEntity.Owner, targetEntity.Repo)),
 	}, nil
 }
 
@@ -36,17 +38,17 @@ func (s *Size) Run(ctx context.Context) error {
 
 	err := s.collector.Collect("run recipe", s.collectionData())
 	if err != nil {
-		logrus.WithError(err).Error("error collecting data")
+		s.log.WithError(err).Error("error collecting data")
 	}
 
 	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
-		logrus.WithError(err).Error("error creating size labels")
+		s.log.WithError(err).Error("error creating size labels")
 		return err
 	}
 
 	prSizeData, err := s.codehost.GetPRSizeData(ctx, owner, repo, number)
 	if err != nil {
-		logrus.WithError(err).Error("error getting pr size data")
+		s.log.WithError(err).Error("error getting pr size data")
 		return err
 	}
 
@@ -64,9 +66,9 @@ func (s *Size) Run(ctx context.Context) error {
 		labelsToRemove = append(labelsToRemove, "small", "medium")
 	}
 
-	logrus.WithField("labels", labelsToAdd).Info("adding labels")
+	s.log.WithField("labels", labelsToAdd).Info("adding labels")
 
-	logrus.WithField("labels", labelsToRemove).Info("removing labels")
+	s.log.WithField("labels", labelsToRemove).Info("removing labels")
 
 	labels := append(prSizeData.Labels, labelsToAdd...)
 
@@ -78,11 +80,12 @@ func (s *Size) Run(ctx context.Context) error {
 		}
 	}
 
-	logrus.WithField("labels", labels).Info("final labels")
+	s.log.WithField("labels", labels).Info("final labels")
 
 	err = s.codehost.SetLabels(ctx, owner, repo, number, labels)
 	if err != nil {
-		return fmt.Errorf("error setting pr labels: %w", err)
+		s.log.WithError(err).Error("error setting pr labels")
+		return err
 	}
 
 	return nil
