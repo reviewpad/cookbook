@@ -14,8 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var initSize cookbook.NewRecipe = cookbook.Recipes["size"]
-
 func TestSize(t *testing.T) {
 	collector := mocks.NewCollector(t)
 	codehost := mocks.NewCodehost(t)
@@ -33,7 +31,7 @@ func TestSize(t *testing.T) {
 				test.mock()
 			}
 
-			size, err := initSize(test.targetEntity, codehost, collector)
+			size, err := cookbook.GetRecipeByName("size", test.targetEntity, codehost, collector)
 			assert.Nil(t, err)
 
 			err = size.Run(ctx)
