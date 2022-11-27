@@ -36,6 +36,8 @@ func (s *Size) Run(ctx context.Context) error {
 	repo := s.targetEntity.Repo
 	number := s.targetEntity.Number
 
+	s.log.Info("running size recipe")
+
 	err := s.collector.Collect("run recipe", s.collectionData())
 	if err != nil {
 		s.log.WithError(err).Error("error collecting data")
