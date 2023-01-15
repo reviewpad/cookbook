@@ -4,6 +4,12 @@
 
 package recipes
 
+import (
+	"context"
+
+	"github.com/reviewpad/reviewpad/v3/handler"
+)
+
 type Recipe interface {
-	Run() error
+	Run(context context.Context, targetEntity handler.TargetEntity) error
 }
