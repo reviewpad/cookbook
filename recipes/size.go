@@ -6,122 +6,154 @@ package recipes
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/reviewpad/cookbook/codehost"
-	"github.com/reviewpad/reviewpad/v3/collector"
+	"github.com/google/go-github/v48/github"
+	"github.com/reviewpad/cookbook/ingredients"
+	reviewpadGitHub "github.com/reviewpad/reviewpad/v3/codehost/github"
 	"github.com/reviewpad/reviewpad/v3/handler"
+	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
 
 type Size struct {
-	targetEntity handler.TargetEntity
-	codehost     codehost.Codehost
-	collector    collector.Collector
-	log          *logrus.Entry
+	gitHubClient *reviewpadGitHub.GithubClient
+	logger       *logrus.Entry
 }
 
-func NewSizeRecipe(targetEntity handler.TargetEntity, codehost codehost.Codehost, collector collector.Collector) (*Size, error) {
-	return &Size{
-		targetEntity,
-		codehost,
-		collector,
-		logrus.WithField("user", fmt.Sprintf("%s/%s", targetEntity.Owner, targetEntity.Repo)),
+var sizeSmallLabel = ingredients.Label{
+	Name:        "small",
+	Color:       "219ebc",
+	Description: "Pull request change is between 0 - 100 changes",
+}
+
+var sizeMediumLabel = ingredients.Label{
+	Name:        "medium",
+	Color:       "faedcd",
+	Description: "Pull request change is between 101 - 500 changes",
+}
+
+var sizeLargeLabel = ingredients.Label{
+	Name:        "large",
+	Color:       "e76f51",
+	Description: "Pull request change is more than 501+ changes",
+}
+
+type targetDetailsForSize struct {
+	PrAdditions uint64
+	PrDeletions uint64
+	RepoLabels  []string
+}
+
+type targetDetailsQueryForSize struct {
+	Repository struct {
+		PullRequest struct {
+			Additions uint64 `graphql:"additions"`
+			Deletions uint64 `graphql:"deletions"`
+		} `graphql:"pullRequest(number: $number)"`
+		Labels struct {
+			PageInfo struct {
+				HasNextPage bool   `graphql:"hasNextPage"`
+				EndCursor   string `graphql:"endCursor"`
+			}
+			Nodes []struct {
+				Name string
+			} `graphql:"nodes"`
+		} `graphql:"labels(first: 100, after: $labelsEndCursor)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+func getTargetDetailsForSize(ctx context.Context, gitHubClient *reviewpadGitHub.GithubClient, targetEntity *handler.TargetEntity) (*targetDetailsForSize, error) {
+	var targetDetails targetDetailsQueryForSize
+	labels := make([]string, 0)
+	hasNextPage := true
+	variables := map[string]interface{}{
+		"owner":           githubv4.String(targetEntity.Owner),
+		"repo":            githubv4.String(targetEntity.Repo),
+		"number":          githubv4.Int(targetEntity.Number),
+		"labelsEndCursor": (*githubv4.String)(nil),
+	}
+
+	for hasNextPage {
+		if err := gitHubClient.GetClientGraphQL().Query(ctx, &targetDetails, variables); err != nil {
+			return nil, err
+		}
+
+		for _, node := range targetDetails.Repository.Labels.Nodes {
+			labels = append(labels, node.Name)
+		}
+
+		variables["labelsEndCursor"] = targetDetails.Repository.Labels.PageInfo.EndCursor
+		hasNextPage = targetDetails.Repository.Labels.PageInfo.HasNextPage
+	}
+
+	return &targetDetailsForSize{
+		PrAdditions: targetDetails.Repository.PullRequest.Additions,
+		PrDeletions: targetDetails.Repository.PullRequest.Deletions,
+		RepoLabels:  labels,
 	}, nil
 }
 
-func (s *Size) Run(ctx context.Context) error {
-	owner := s.targetEntity.Owner
-	repo := s.targetEntity.Repo
-	number := s.targetEntity.Number
-
-	s.log.Info("running size recipe")
-
-	err := s.collector.Collect("run recipe", s.collectionData())
-	if err != nil {
-		s.log.WithError(err).Error("error collecting data")
+func NewSizeRecipe(logger *logrus.Entry, gitHubClient *reviewpadGitHub.GithubClient) *Size {
+	return &Size{
+		gitHubClient: gitHubClient,
+		logger:       logger,
 	}
+}
 
-	if err := createSizeLabels(ctx, owner, repo, s.codehost); err != nil {
-		s.log.WithError(err).Error("error creating size labels")
+func (r *Size) Run(ctx context.Context, targetEntity handler.TargetEntity) error {
+	targetDetails, err := getTargetDetailsForSize(ctx, r.gitHubClient, &targetEntity)
+	if err != nil {
 		return err
 	}
 
-	prSizeData, err := s.codehost.GetPRSizeData(ctx, owner, repo, number)
-	if err != nil {
-		s.log.WithError(err).Error("error getting pr size data")
-		return err
-	}
+	totalLinesChanged := targetDetails.PrAdditions + targetDetails.PrDeletions
 
-	labelsToAdd := make([]string, 0)
-	labelsToRemove := make([]string, 0)
+	labelsToAdd := make([]ingredients.Label, 0)
+	labelsToRemove := make([]ingredients.Label, 0)
 
-	if prSizeData.Changes <= 100 {
-		labelsToAdd = append(labelsToAdd, "small")
-		labelsToRemove = append(labelsToRemove, "medium", "large")
-	} else if prSizeData.Changes >= 100 && prSizeData.Changes <= 500 {
-		labelsToAdd = append(labelsToAdd, "medium")
-		labelsToRemove = append(labelsToRemove, "small", "large")
+	if totalLinesChanged <= 100 {
+		labelsToAdd = append(labelsToAdd, sizeSmallLabel)
+		labelsToRemove = append(labelsToRemove, sizeMediumLabel, sizeLargeLabel)
+	} else if totalLinesChanged >= 100 && totalLinesChanged <= 500 {
+		labelsToAdd = append(labelsToAdd, sizeMediumLabel)
+		labelsToRemove = append(labelsToRemove, sizeSmallLabel, sizeLargeLabel)
 	} else {
-		labelsToAdd = append(labelsToAdd, "large")
-		labelsToRemove = append(labelsToRemove, "small", "medium")
+		labelsToAdd = append(labelsToAdd, sizeLargeLabel)
+		labelsToRemove = append(labelsToRemove, sizeSmallLabel, sizeMediumLabel)
 	}
 
-	s.log.WithField("labels", labelsToAdd).Info("adding labels")
+	r.logger.Infof("adding labels: %v", labelsToAdd)
+	r.logger.Infof("removing labels: %v", labelsToRemove)
 
-	s.log.WithField("labels", labelsToRemove).Info("removing labels")
-
-	labels := append(prSizeData.Labels, labelsToAdd...)
-
-	for _, labelToRemove := range labelsToRemove {
-		index := slices.Index(labels, labelToRemove)
-
-		if index != -1 {
-			labels = slices.Delete(labels, index, index+1)
+	for _, label := range labelsToAdd {
+		if !slices.Contains(targetDetails.RepoLabels, label.Name) {
+			_, _, err := r.gitHubClient.CreateLabel(ctx, targetEntity.Owner, targetEntity.Repo, &github.Label{
+				Name:        &label.Name,
+				Color:       &label.Color,
+				Description: &label.Description,
+			})
+			if err != nil {
+				r.logger.WithError(err).Errorf("failed to create label: %s", label.Name)
+			}
 		}
 	}
 
-	s.log.WithField("labels", labels).Info("final labels")
-
-	err = s.codehost.SetLabels(ctx, owner, repo, number, labels)
+	labelToAddNames := make([]string, 0)
+	for _, label := range labelsToAdd {
+		labelToAddNames = append(labelToAddNames, label.Name)
+	}
+	_, _, err = r.gitHubClient.AddLabels(ctx, targetEntity.Owner, targetEntity.Repo, targetEntity.Number, labelToAddNames)
 	if err != nil {
-		s.log.WithError(err).Error("error setting pr labels")
-		return err
+		r.logger.WithError(err).Errorf("failed to add labels: %v", labelToAddNames)
+	}
+
+	for _, label := range labelsToRemove {
+		_, err = r.gitHubClient.RemoveLabelForIssue(ctx, targetEntity.Owner, targetEntity.Repo, targetEntity.Number, label.Name)
+		if err != nil {
+			r.logger.WithError(err).Errorf("failed to remove label: %s", label.Name)
+		}
 	}
 
 	return nil
-}
-
-func (s *Size) collectionData() map[string]interface{} {
-	return map[string]interface{}{
-		"recipe_name": "size",
-		"owner":       s.targetEntity.Owner,
-		"repo":        s.targetEntity.Repo,
-		"kind":        s.targetEntity.Kind,
-		"number":      s.targetEntity.Number,
-		"distinct_id": s.targetEntity.Owner,
-	}
-}
-
-func createSizeLabels(ctx context.Context, owner, repo string, ch codehost.Codehost) error {
-	labels := []codehost.Label{
-		{
-			Name:        "small",
-			Color:       "219ebc",
-			Description: "Pull request change is between 0 - 100 changes",
-		},
-		{
-			Name:        "medium",
-			Color:       "faedcd",
-			Description: "Pull request change is between 101 - 500 changes",
-		},
-		{
-			Name:        "large",
-			Color:       "e76f51",
-			Description: "Pull request change is more than 501+ changes",
-		},
-	}
-
-	return ch.CreateLabels(ctx, owner, repo, labels)
 }

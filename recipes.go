@@ -7,25 +7,32 @@ package cookbook
 import (
 	"fmt"
 
-	"github.com/reviewpad/cookbook/codehost"
 	"github.com/reviewpad/cookbook/recipes"
-	"github.com/reviewpad/reviewpad/v3/collector"
-	"github.com/reviewpad/reviewpad/v3/handler"
+	"github.com/reviewpad/reviewpad/v3/codehost/github"
+	"github.com/sirupsen/logrus"
 )
 
-type NewRecipe func(handler.TargetEntity, codehost.Codehost, collector.Collector) (recipes.Recipe, error)
-
-var recs map[string]NewRecipe = map[string]NewRecipe{
-	"size": func(te handler.TargetEntity, ch codehost.Codehost, co collector.Collector) (recipes.Recipe, error) {
-		return recipes.NewSizeRecipe(te, ch, co)
-	},
+type Cookbook interface {
+	GetRecipe(name string) (recipes.Recipe, error)
 }
 
-func GetRecipeByName(name string, te handler.TargetEntity, ch codehost.Codehost, co collector.Collector) (recipes.Recipe, error) {
-	init, ok := recs[name]
-	if !ok {
-		return nil, fmt.Errorf(`"%s" recipe not found`, name)
-	}
+type cookbook struct {
+	gitHubClient *github.GithubClient
+	logger       *logrus.Entry
+}
 
-	return init(te, ch, co)
+func NewCookbook(logger *logrus.Entry, gitHubClient *github.GithubClient) Cookbook {
+	return &cookbook{
+		gitHubClient: gitHubClient,
+		logger:       logger,
+	}
+}
+
+func (c *cookbook) GetRecipe(name string) (recipes.Recipe, error) {
+	switch name {
+	case "size":
+		return recipes.NewSizeRecipe(c.logger.WithField("recipe", "size"), c.gitHubClient), nil
+	default:
+		return nil, fmt.Errorf("recipe %s not found", name)
+	}
 }
